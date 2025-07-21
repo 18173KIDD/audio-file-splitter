@@ -2,8 +2,11 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="description" content="音声ファイルを指定した条件で分割するWebアプリケーション">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>音声ファイル分割ツール - Audio File Splitter</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -49,10 +52,22 @@
             <!-- 波形表示エリア -->
             <section id="waveform-section" class="waveform-container" style="display: none;">
                 <h2>波形表示</h2>
+                <div class="waveform-help">
+                    <small>
+                        🖱️ ドラッグ: パン | マウスホイール: ズーム | Shift+クリック: 分割位置追加 | Ctrl+クリック: 分割位置削除 | クリック: シーク
+                    </small>
+                </div>
                 <canvas id="waveformCanvas" class="waveform-canvas"></canvas>
-                <div class="playback-controls">
-                    <button id="playBtn" class="btn btn-play">再生</button>
-                    <span id="currentTime" class="time-display">0:00 / 0:00</span>
+                <div class="waveform-controls">
+                    <div class="playback-controls">
+                        <button id="playBtn" class="btn btn-play">再生</button>
+                        <span id="currentTime" class="time-display">0:00 / 0:00</span>
+                    </div>
+                    <div class="zoom-controls">
+                        <button id="zoomInBtn" class="btn btn-secondary">ズームイン</button>
+                        <button id="zoomOutBtn" class="btn btn-secondary">ズームアウト</button>
+                        <button id="zoomResetBtn" class="btn btn-secondary">リセット</button>
+                    </div>
                 </div>
             </section>
 
@@ -67,6 +82,10 @@
                     <label class="mode-option">
                         <input type="radio" name="splitMode" value="parts">
                         <span class="mode-label">個数指定で分割</span>
+                    </label>
+                    <label class="mode-option">
+                        <input type="radio" name="splitMode" value="markers">
+                        <span class="mode-label">マーカー位置で分割</span>
                     </label>
                 </div>
 
@@ -83,11 +102,35 @@
                     <input type="number" id="splitParts" min="2" max="50" step="1" value="3" class="input-number">
                     <span class="settings-hint">例: 3つに均等分割</span>
                 </div>
+                
+                <!-- マーカー設定 -->
+                <div id="markersSettings" class="settings-panel" style="display: none;">
+                    <p>波形上でShift+クリックして分割位置をマークします</p>
+                    <div id="markersList" class="markers-list"></div>
+                    <span class="settings-hint">Ctrl+クリックでマーカーを削除できます</span>
+                </div>
 
                 <!-- ファイル名設定 -->
                 <div class="filename-settings">
+                    <label for="namingPattern">命名パターン:</label>
+                    <select id="namingPattern" class="input-select">
+                        <option value="simple">シンプル（プレフィックス_連番）</option>
+                        <option value="timestamp">タイムスタンプ付き（プレフィックス_日時_連番）</option>
+                        <option value="duration">長さ付き（プレフィックス_開始時間-終了時間）</option>
+                        <option value="custom">カスタム</option>
+                    </select>
+                    
                     <label for="filePrefix">ファイル名プレフィックス:</label>
                     <input type="text" id="filePrefix" class="input-text" placeholder="例: interview">
+                    
+                    <div id="customPattern" class="custom-pattern" style="display: none;">
+                        <label for="customPatternInput">カスタムパターン:</label>
+                        <input type="text" id="customPatternInput" class="input-text" placeholder="例: {prefix}_{date}_{num:03d}">
+                        <span class="settings-hint">
+                            利用可能な変数: {prefix}, {original}, {num}, {num:03d}, {date}, {time}, {start}, {end}, {duration}
+                        </span>
+                    </div>
+                    
                     <span class="settings-hint">空欄の場合は元のファイル名を使用</span>
                 </div>
 
@@ -108,7 +151,7 @@
                 <h2>分割完了</h2>
                 <div id="resultsList" class="results-list"></div>
                 <div class="results-actions">
-                    <button id="downloadAllBtn" class="btn btn-primary">すべてダウンロード</button>
+                    <button id="downloadAllBtn" class="btn btn-primary">ZIPでまとめてダウンロード</button>
                     <button id="resetBtn" class="btn btn-secondary">新しいファイルを処理</button>
                 </div>
             </section>
@@ -119,6 +162,8 @@
         </footer>
     </div>
 
-    <script src="js/app.js" type="module"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="js/waveform-enhanced.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
