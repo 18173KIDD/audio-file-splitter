@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="音声ファイルを指定した条件で分割するWebアプリケーション">
+    <title>音声ファイル分割ツール - Audio File Splitter</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>音声ファイル分割ツール</h1>
+            <p class="subtitle">長時間の音声ファイルを簡単に分割</p>
+        </header>
+
+        <main>
+            <!-- ファイルアップロードエリア -->
+            <section id="upload-section" class="upload-area">
+                <div class="upload-box" id="uploadBox">
+                    <svg class="upload-icon" viewBox="0 0 24 24" width="48" height="48">
+                        <path fill="currentColor" d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/>
+                    </svg>
+                    <p class="upload-text">音声ファイルをドラッグ&ドロップ<br>または<button class="btn-browse">ファイルを選択</button></p>
+                    <input type="file" id="fileInput" accept="audio/*" hidden>
+                    <p class="upload-info">対応形式: MP3, WAV, M4A, OGG</p>
+                </div>
+            </section>
+
+            <!-- ファイル情報表示 -->
+            <section id="file-info" class="file-info" style="display: none;">
+                <h2>ファイル情報</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">ファイル名:</span>
+                        <span id="fileName" class="info-value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">長さ:</span>
+                        <span id="fileDuration" class="info-value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">サイズ:</span>
+                        <span id="fileSize" class="info-value">-</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 波形表示エリア -->
+            <section id="waveform-section" class="waveform-container" style="display: none;">
+                <h2>波形表示</h2>
+                <canvas id="waveformCanvas" class="waveform-canvas"></canvas>
+                <div class="playback-controls">
+                    <button id="playBtn" class="btn btn-play">再生</button>
+                    <span id="currentTime" class="time-display">0:00 / 0:00</span>
+                </div>
+            </section>
+
+            <!-- 分割設定 -->
+            <section id="split-settings" class="split-settings" style="display: none;">
+                <h2>分割設定</h2>
+                <div class="split-mode">
+                    <label class="mode-option">
+                        <input type="radio" name="splitMode" value="time" checked>
+                        <span class="mode-label">時間指定で分割</span>
+                    </label>
+                    <label class="mode-option">
+                        <input type="radio" name="splitMode" value="parts">
+                        <span class="mode-label">個数指定で分割</span>
+                    </label>
+                </div>
+
+                <!-- 時間指定設定 -->
+                <div id="timeSettings" class="settings-panel">
+                    <label for="splitMinutes">分割間隔（分）:</label>
+                    <input type="number" id="splitMinutes" min="0.5" max="60" step="0.5" value="5" class="input-number">
+                    <span class="settings-hint">例: 5分ごとに分割</span>
+                </div>
+
+                <!-- 個数指定設定 -->
+                <div id="partsSettings" class="settings-panel" style="display: none;">
+                    <label for="splitParts">分割個数:</label>
+                    <input type="number" id="splitParts" min="2" max="50" step="1" value="3" class="input-number">
+                    <span class="settings-hint">例: 3つに均等分割</span>
+                </div>
+
+                <!-- ファイル名設定 -->
+                <div class="filename-settings">
+                    <label for="filePrefix">ファイル名プレフィックス:</label>
+                    <input type="text" id="filePrefix" class="input-text" placeholder="例: interview">
+                    <span class="settings-hint">空欄の場合は元のファイル名を使用</span>
+                </div>
+
+                <button id="splitBtn" class="btn btn-primary">分割開始</button>
+            </section>
+
+            <!-- 進捗表示 -->
+            <section id="progress-section" class="progress-container" style="display: none;">
+                <h2>処理中...</h2>
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <p id="progressText" class="progress-text">準備中...</p>
+            </section>
+
+            <!-- 結果表示 -->
+            <section id="results-section" class="results-container" style="display: none;">
+                <h2>分割完了</h2>
+                <div id="resultsList" class="results-list"></div>
+                <div class="results-actions">
+                    <button id="downloadAllBtn" class="btn btn-primary">すべてダウンロード</button>
+                    <button id="resetBtn" class="btn btn-secondary">新しいファイルを処理</button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 Audio File Splitter. <a href="https://github.com/18173KIDD/audio-file-splitter" target="_blank">GitHub</a></p>
+        </footer>
+    </div>
+
+    <script src="js/app.js" type="module"></script>
+</body>
+</html>
