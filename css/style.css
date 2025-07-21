@@ -233,19 +233,42 @@ section h2 {
     margin-bottom: var(--spacing-lg);
 }
 
+.waveform-help {
+    margin-bottom: var(--spacing-xs);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    background-color: var(--surface);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-sm);
+}
+
 .waveform-canvas {
     width: 100%;
-    height: 150px;
+    height: 200px;
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
     background-color: white;
+    cursor: grab;
+}
+
+.waveform-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: var(--spacing-sm);
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
 }
 
 .playback-controls {
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
-    margin-top: var(--spacing-sm);
+}
+
+.zoom-controls {
+    display: flex;
+    gap: var(--spacing-xs);
 }
 
 .time-display {
@@ -291,7 +314,8 @@ section h2 {
 }
 
 .input-number,
-.input-text {
+.input-text,
+.input-select {
     width: 100%;
     padding: var(--spacing-xs) var(--spacing-sm);
     border: 1px solid var(--border-color);
@@ -314,6 +338,64 @@ section h2 {
     margin-top: var(--spacing-lg);
     padding-top: var(--spacing-lg);
     border-top: 1px solid var(--border-color);
+}
+
+.filename-settings label {
+    display: block;
+    margin-top: var(--spacing-sm);
+}
+
+.filename-settings label:first-child {
+    margin-top: 0;
+}
+
+.custom-pattern {
+    margin-top: var(--spacing-sm);
+    padding: var(--spacing-sm);
+    background-color: var(--surface);
+    border-radius: var(--radius-sm);
+}
+
+/* マーカーリスト */
+.markers-list {
+    margin: var(--spacing-sm) 0;
+    padding: var(--spacing-sm);
+    background-color: white;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    min-height: 50px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.marker-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-xs);
+    margin-bottom: var(--spacing-xs);
+    background-color: var(--surface);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+}
+
+.marker-item:last-child {
+    margin-bottom: 0;
+}
+
+.marker-time {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.marker-remove {
+    color: var(--danger-color);
+    cursor: pointer;
+    padding: 0 var(--spacing-xs);
+}
+
+.marker-remove:hover {
+    color: #dc2626;
 }
 
 /* 進捗表示 */
@@ -449,7 +531,175 @@ footer a:hover {
     }
     
     .waveform-canvas {
-        height: 200px;
+        height: 250px;
+    }
+}
+
+/* レスポンシブ - 小画面での波形コントロール */
+@media (max-width: 640px) {
+    /* ヘッダー調整 */
+    header h1 {
+        font-size: 1.5rem;
+    }
+    
+    .subtitle {
+        font-size: 0.75rem;
+    }
+    
+    /* コンテナ調整 */
+    .container {
+        padding: 0 var(--spacing-xs);
+    }
+    
+    /* アップロードエリア */
+    .upload-box {
+        padding: var(--spacing-md);
+    }
+    
+    .upload-icon {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .upload-text {
+        font-size: 1rem;
+    }
+    
+    /* ファイル情報 */
+    .info-grid {
+        gap: var(--spacing-xs);
+    }
+    
+    .info-item {
+        font-size: 0.875rem;
+    }
+    
+    /* 波形表示 */
+    .waveform-canvas {
+        height: 150px;
+    }
+    
+    .waveform-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--spacing-xs);
+    }
+    
+    .playback-controls {
+        justify-content: space-between;
+        width: 100%;
+    }
+    
+    .zoom-controls {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: var(--spacing-xs);
+    }
+    
+    .zoom-controls .btn {
+        padding: var(--spacing-xs);
+        font-size: 0.75rem;
+    }
+    
+    .waveform-help {
+        font-size: 0.625rem;
+        padding: var(--spacing-xs);
+    }
+    
+    /* 分割設定 */
+    .split-mode {
+        flex-direction: column;
+        gap: var(--spacing-xs);
+    }
+    
+    .mode-option {
+        padding: var(--spacing-xs);
+        background-color: var(--surface);
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border-color);
+    }
+    
+    .mode-option:has(input:checked) {
+        border-color: var(--primary-color);
+        background-color: rgba(37, 99, 235, 0.05);
+    }
+    
+    /* 入力フィールド */
+    .input-number {
+        max-width: 100%;
+    }
+    
+    /* ボタン */
+    .btn {
+        min-height: 44px; /* タッチターゲット最小サイズ */
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+    
+    .btn-primary {
+        width: 100%;
+        font-size: 1.125rem;
+    }
+    
+    /* 結果表示 */
+    .result-item {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-sm);
+    }
+    
+    .result-actions {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--spacing-xs);
+    }
+    
+    .result-actions .btn {
+        font-size: 0.875rem;
+        padding: var(--spacing-xs) var(--spacing-sm);
+    }
+    
+    .results-actions {
+        flex-direction: column;
+        gap: var(--spacing-sm);
+    }
+    
+    .results-actions .btn {
+        width: 100%;
+    }
+    
+    /* メッセージオーバーレイ */
+    .message-overlay {
+        top: 10px;
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
+    
+    .message-content {
+        font-size: 0.875rem;
+        padding: var(--spacing-xs) var(--spacing-sm);
+    }
+    
+    /* マーカーリスト */
+    .markers-list {
+        max-height: 100px;
+        font-size: 0.75rem;
+    }
+    
+    .marker-item {
+        padding: var(--spacing-xs);
+    }
+    
+    /* カスタムパターン */
+    .custom-pattern {
+        font-size: 0.875rem;
+    }
+    
+    /* フッター */
+    footer {
+        font-size: 0.75rem;
+        padding: var(--spacing-sm) 0;
     }
 }
 
