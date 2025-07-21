@@ -13,6 +13,7 @@ let sourceNode = null;
 let isPlaying = false;
 let startTime = 0;
 let pauseTime = 0;
+let waveformEnhanced = null; // 拡張波形表示インスタンス
 
 // DOM要素の取得
 const elements = {
@@ -34,9 +35,14 @@ const elements = {
   splitModeRadios: document.querySelectorAll('input[name="splitMode"]'),
   timeSettings: document.getElementById('timeSettings'),
   partsSettings: document.getElementById('partsSettings'),
+  markersSettings: document.getElementById('markersSettings'),
+  markersList: document.getElementById('markersList'),
   splitMinutes: document.getElementById('splitMinutes'),
   splitParts: document.getElementById('splitParts'),
   filePrefix: document.getElementById('filePrefix'),
+  namingPattern: document.getElementById('namingPattern'),
+  customPatternDiv: document.getElementById('customPattern'),
+  customPatternInput: document.getElementById('customPatternInput'),
   splitBtn: document.getElementById('splitBtn'),
   
   progressSection: document.getElementById('progress-section'),
@@ -46,13 +52,19 @@ const elements = {
   resultsSection: document.getElementById('results-section'),
   resultsList: document.getElementById('resultsList'),
   downloadAllBtn: document.getElementById('downloadAllBtn'),
-  resetBtn: document.getElementById('resetBtn')
+  resetBtn: document.getElementById('resetBtn'),
+  
+  // ズームコントロール
+  zoomInBtn: document.getElementById('zoomInBtn'),
+  zoomOutBtn: document.getElementById('zoomOutBtn'),
+  zoomResetBtn: document.getElementById('zoomResetBtn')
 };
 
 // 初期化
 window.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   checkBrowserSupport();
+  updateUIForDevice();
 });
 
 /**
@@ -64,6 +76,27 @@ function checkBrowserSupport() {
     return false;
   }
   return true;
+}
+
+/**
+ * デバイスに応じたUI更新
+ */
+function updateUIForDevice() {
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const waveformHelp = document.querySelector('.waveform-help small');
+  
+  if (isMobile && waveformHelp) {
+    waveformHelp.innerHTML = '📱 タップ: シーク | ピンチ: ズーム | スワイプ: パン | ロングタップ: 分割位置追加';
+  }
+  
+  // モバイルでのファイルアップロード改善
+  if (isMobile) {
+    const fileInput = elements.fileInput;
+    if (fileInput) {
+      // iOSで音声ファイルの録音を許可
+      fileInput.setAttribute('capture', 'microphone');
+    }
+  }
 }
 
 /**
@@ -95,6 +128,9 @@ function setupEventListeners() {
     radio.addEventListener('change', handleSplitModeChange);
   });
   
+  // 命名パターン切り替え
+  elements.namingPattern?.addEventListener('change', handleNamingPatternChange);
+  
   // 分割実行
   elements.splitBtn.addEventListener('click', handleSplit);
   
@@ -103,6 +139,29 @@ function setupEventListeners() {
   
   // リセット
   elements.resetBtn.addEventListener('click', handleReset);
+  
+  // ズームコントロール
+  elements.zoomInBtn?.addEventListener('click', () => {
+    if (waveformEnhanced) {
+      waveformEnhanced.zoom *= 1.5;
+      waveformEnhanced.zoom = Math.min(waveformEnhanced.zoom, 20);
+      waveformEnhanced.draw();
+    }
+  });
+  
+  elements.zoomOutBtn?.addEventListener('click', () => {
+    if (waveformEnhanced) {
+      waveformEnhanced.zoom /= 1.5;
+      waveformEnhanced.zoom = Math.max(waveformEnhanced.zoom, 1);
+      waveformEnhanced.draw();
+    }
+  });
+  
+  elements.zoomResetBtn?.addEventListener('click', () => {
+    if (waveformEnhanced) {
+      waveformEnhanced.resetZoom();
+    }
+  });
 }
 
 /**
@@ -308,46 +367,35 @@ function showSuccess(message) {
  */
 function drawWaveform() {
   const canvas = elements.waveformCanvas;
-  const ctx = canvas.getContext('2d');
   
-  // キャンバスサイズ設定
-  canvas.width = canvas.offsetWidth * window.devicePixelRatio;
-  canvas.height = canvas.offsetHeight * window.devicePixelRatio;
-  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-  
-  const width = canvas.offsetWidth;
-  const height = canvas.offsetHeight;
-  
-  // 背景クリア
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, width, height);
-  
-  // 波形データ取得（簡略化のため左チャンネルのみ）
-  const data = audioBuffer.getChannelData(0);
-  const step = Math.ceil(data.length / width);
-  const amp = height / 2;
-  
-  // 波形描画
-  ctx.beginPath();
-  ctx.moveTo(0, amp);
-  ctx.strokeStyle = '#2563eb';
-  ctx.lineWidth = 1;
-  
-  for (let i = 0; i < width; i++) {
-    let min = 1.0;
-    let max = -1.0;
+  // 拡張波形モジュールを使用
+  if (!waveformEnhanced) {
+    waveformEnhanced = new WaveformEnhanced(canvas, audioBuffer);
     
-    for (let j = 0; j < step; j++) {
-      const datum = data[(i * step) + j];
-      if (datum < min) min = datum;
-      if (datum > max) max = datum;
-    }
+    // シークイベントリスナー
+    canvas.addEventListener('seek', (e) => {
+      const time = e.detail.time;
+      if (sourceNode) {
+        pausePlayback();
+        pauseTime = time;
+        startPlayback();
+      } else {
+        pauseTime = time;
+        updateTimeDisplay();
+      }
+    });
     
-    ctx.lineTo(i, (1 + min) * amp);
-    ctx.lineTo(i, (1 + max) * amp);
+    // 分割マーカー変更イベントリスナー
+    canvas.addEventListener('splitMarkersChanged', (e) => {
+      updateSplitPreview();
+    });
+  } else {
+    // AudioBufferが更新された場合
+    waveformEnhanced.audioBuffer = audioBuffer;
+    waveformEnhanced.setupCanvas();
   }
   
-  ctx.stroke();
+  waveformEnhanced.draw();
   
   // 時間表示更新
   updateTimeDisplay();
@@ -435,22 +483,92 @@ function updateTimeDisplay() {
   const duration = audioBuffer.duration;
   elements.currentTime.textContent = `${formatTime(currentTime)} / ${formatTime(duration)}`;
   
+  // 拡張波形の再生位置更新
+  if (waveformEnhanced) {
+    waveformEnhanced.updatePlayhead(currentTime);
+  }
+  
   if (isPlaying) {
     requestAnimationFrame(updateTimeDisplay);
   }
 }
 
 /**
+ * 分割プレビューの更新
+ */
+function updateSplitPreview() {
+  if (!waveformEnhanced) return;
+  
+  const markers = waveformEnhanced.getSplitMarkers();
+  
+  // マーカーリストの更新
+  elements.markersList.innerHTML = '';
+  
+  if (markers.length === 0) {
+    elements.markersList.innerHTML = '<div style="text-align: center; color: #999;">マーカーがありません</div>';
+  } else {
+    markers.forEach((marker, index) => {
+      const item = document.createElement('div');
+      item.className = 'marker-item';
+      item.innerHTML = `
+        <span class="marker-time">マーカー ${index + 1}: ${formatTime(marker)}</span>
+        <span class="marker-remove" onclick="removeMarker(${index})">削除</span>
+      `;
+      elements.markersList.appendChild(item);
+    });
+  }
+  
+  // 現在の分割モードがマーカーの場合、ボタンを有効/無効にする
+  const currentMode = document.querySelector('input[name="splitMode"]:checked').value;
+  if (currentMode === 'markers') {
+    elements.splitBtn.disabled = markers.length === 0;
+  }
+}
+
+/**
+ * マーカーの削除
+ */
+window.removeMarker = function(index) {
+  if (waveformEnhanced) {
+    waveformEnhanced.removeSplitMarker(index);
+  }
+};
+
+/**
  * 分割モード変更処理
  */
 function handleSplitModeChange(e) {
   const mode = e.target.value;
-  if (mode === 'time') {
-    elements.timeSettings.style.display = 'block';
-    elements.partsSettings.style.display = 'none';
-  } else {
-    elements.timeSettings.style.display = 'none';
-    elements.partsSettings.style.display = 'block';
+  
+  // すべての設定パネルを非表示
+  elements.timeSettings.style.display = 'none';
+  elements.partsSettings.style.display = 'none';
+  elements.markersSettings.style.display = 'none';
+  
+  // 選択されたモードの設定パネルを表示
+  switch (mode) {
+    case 'time':
+      elements.timeSettings.style.display = 'block';
+      break;
+    case 'parts':
+      elements.partsSettings.style.display = 'block';
+      break;
+    case 'markers':
+      elements.markersSettings.style.display = 'block';
+      updateSplitPreview(); // マーカーリストを更新
+      break;
+  }
+}
+
+/**
+ * 命名パターン変更処理
+ */
+function handleNamingPatternChange(e) {
+  const pattern = e.target.value;
+  
+  // カスタムパターン入力エリアの表示/非表示
+  if (elements.customPatternDiv) {
+    elements.customPatternDiv.style.display = pattern === 'custom' ? 'block' : 'none';
   }
 }
 
@@ -481,7 +599,7 @@ async function handleSplit() {
       showError('分割間隔がファイルの長さより長いです。');
       return;
     }
-  } else {
+  } else if (mode === 'parts') {
     const parts = parseInt(elements.splitParts.value);
     if (isNaN(parts) || parts < 2) {
       showError('分割個数は2以上の整数を入力してください。');
@@ -489,6 +607,11 @@ async function handleSplit() {
     }
     if (parts > 50) {
       showError('分割個数は50以下にしてください。');
+      return;
+    }
+  } else if (mode === 'markers') {
+    if (!waveformEnhanced || waveformEnhanced.getSplitMarkers().length === 0) {
+      showError('波形上でShift+クリックして分割位置をマークしてください。');
       return;
     }
   }
@@ -529,24 +652,70 @@ function calculateSegments(mode) {
     
     while (start < duration) {
       const end = Math.min(start + seconds, duration);
-      segments.push({
+      const segment = {
         start,
         end,
-        name: generateFileName(partNumber)
-      });
+        name: ''
+      };
+      segment.name = generateFileName(partNumber, segment);
+      segments.push(segment);
       start = end;
       partNumber++;
     }
-  } else {
+  } else if (mode === 'parts') {
     const parts = parseInt(elements.splitParts.value);
     const partDuration = duration / parts;
     
     for (let i = 0; i < parts; i++) {
-      segments.push({
+      const segment = {
         start: i * partDuration,
         end: Math.min((i + 1) * partDuration, duration),
-        name: generateFileName(i + 1)
-      });
+        name: ''
+      };
+      segment.name = generateFileName(i + 1, segment);
+      segments.push(segment);
+    }
+  } else if (mode === 'markers') {
+    if (!waveformEnhanced) return segments;
+    
+    const markers = waveformEnhanced.getSplitMarkers();
+    if (markers.length === 0) return segments;
+    
+    // マーカーをソート（念のため）
+    const sortedMarkers = [...markers].sort((a, b) => a - b);
+    
+    // 最初のセグメント（開始からマーカー1まで）
+    if (sortedMarkers[0] > 0) {
+      const segment = {
+        start: 0,
+        end: sortedMarkers[0],
+        name: ''
+      };
+      segment.name = generateFileName(1, segment);
+      segments.push(segment);
+    }
+    
+    // マーカー間のセグメント
+    for (let i = 0; i < sortedMarkers.length - 1; i++) {
+      const segment = {
+        start: sortedMarkers[i],
+        end: sortedMarkers[i + 1],
+        name: ''
+      };
+      segment.name = generateFileName(segments.length + 1, segment);
+      segments.push(segment);
+    }
+    
+    // 最後のセグメント（最後のマーカーから終端まで）
+    const lastMarker = sortedMarkers[sortedMarkers.length - 1];
+    if (lastMarker < duration) {
+      const segment = {
+        start: lastMarker,
+        end: duration,
+        name: ''
+      };
+      segment.name = generateFileName(segments.length + 1, segment);
+      segments.push(segment);
     }
   }
   
@@ -556,9 +725,68 @@ function calculateSegments(mode) {
 /**
  * ファイル名生成
  */
-function generateFileName(partNumber) {
+function generateFileName(partNumber, segment) {
   const prefix = elements.filePrefix.value || currentFile.name.replace(/\.[^/.]+$/, '');
-  return `${prefix}_part${partNumber.toString().padStart(2, '0')}.wav`;
+  const pattern = elements.namingPattern?.value || 'simple';
+  
+  // 日時情報の取得
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '');
+  
+  // 時間フォーマット用ヘルパー関数
+  const formatTimeForName = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${minutes}m${secs}s`;
+  };
+  
+  let fileName;
+  
+  switch (pattern) {
+    case 'simple':
+      fileName = `${prefix}_part${partNumber.toString().padStart(2, '0')}`;
+      break;
+      
+    case 'timestamp':
+      fileName = `${prefix}_${dateStr}_${timeStr}_part${partNumber.toString().padStart(2, '0')}`;
+      break;
+      
+    case 'duration':
+      if (segment) {
+        const startTime = formatTimeForName(segment.start);
+        const endTime = formatTimeForName(segment.end);
+        fileName = `${prefix}_${startTime}-${endTime}`;
+      } else {
+        fileName = `${prefix}_part${partNumber.toString().padStart(2, '0')}`;
+      }
+      break;
+      
+    case 'custom':
+      const customPattern = elements.customPatternInput?.value || '{prefix}_part{num:02d}';
+      fileName = customPattern
+        .replace('{prefix}', prefix)
+        .replace('{original}', currentFile.name.replace(/\.[^/.]+$/, ''))
+        .replace('{date}', dateStr)
+        .replace('{time}', timeStr)
+        .replace('{num}', partNumber.toString())
+        .replace(/{num:(\d+)d}/g, (match, digits) => {
+          return partNumber.toString().padStart(parseInt(digits), '0');
+        });
+        
+      if (segment) {
+        fileName = fileName
+          .replace('{start}', formatTimeForName(segment.start))
+          .replace('{end}', formatTimeForName(segment.end))
+          .replace('{duration}', formatTimeForName(segment.end - segment.start));
+      }
+      break;
+      
+    default:
+      fileName = `${prefix}_part${partNumber.toString().padStart(2, '0')}`;
+  }
+  
+  return `${fileName}.wav`;
 }
 
 /**
@@ -747,14 +975,75 @@ window.playPreview = function(url) {
  * 全ファイルダウンロード
  */
 async function handleDownloadAll() {
-  if (!window.splitResults) return;
+  if (!window.splitResults || window.splitResults.length === 0) {
+    showError('ダウンロードするファイルがありません。');
+    return;
+  }
   
-  // ZIP作成は将来的に実装
-  // 現時点では個別ダウンロードリンクをクリック
-  const links = elements.resultsList.querySelectorAll('a[download]');
-  links.forEach((link, index) => {
-    setTimeout(() => link.click(), index * 100);
-  });
+  // JSZipが読み込まれているか確認
+  if (typeof JSZip === 'undefined') {
+    showError('ZIP機能が利用できません。ページを再読み込みしてください。');
+    return;
+  }
+  
+  // ボタンを無効化してローディング状態に
+  elements.downloadAllBtn.disabled = true;
+  const originalText = elements.downloadAllBtn.textContent;
+  elements.downloadAllBtn.textContent = 'ZIP作成中...';
+  
+  try {
+    // JSZipインスタンスを作成
+    const zip = new JSZip();
+    
+    // 各分割ファイルをZIPに追加
+    for (const result of window.splitResults) {
+      // Blob URLからBlobを取得
+      const response = await fetch(result.url);
+      const blob = await response.blob();
+      
+      // ZIPにファイルを追加
+      zip.file(result.name, blob);
+    }
+    
+    // ZIPファイルを生成
+    elements.downloadAllBtn.textContent = 'ZIP生成中...';
+    const zipBlob = await zip.generateAsync({
+      type: 'blob',
+      compression: 'DEFLATE',
+      compressionOptions: {
+        level: 6
+      }
+    }, (metadata) => {
+      // プログレス更新
+      const progress = Math.round(metadata.percent);
+      elements.downloadAllBtn.textContent = `ZIP生成中... ${progress}%`;
+    });
+    
+    // ダウンロード用のファイル名を生成
+    const baseFileName = elements.filePrefix.value || currentFile.name.replace(/\.[^/.]+$/, '');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const zipFileName = `${baseFileName}_split_${timestamp}.zip`;
+    
+    // ダウンロードリンクを作成してクリック
+    const url = URL.createObjectURL(zipBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = zipFileName;
+    link.click();
+    
+    // メモリ解放
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    
+    showSuccess(`${zipFileName} のダウンロードを開始しました`);
+    
+  } catch (error) {
+    console.error('ZIP作成エラー:', error);
+    showError('ZIPファイルの作成に失敗しました: ' + error.message);
+  } finally {
+    // ボタンを元に戻す
+    elements.downloadAllBtn.disabled = false;
+    elements.downloadAllBtn.textContent = originalText;
+  }
 }
 
 /**
@@ -771,6 +1060,11 @@ function handleReset() {
   currentFile = null;
   pauseTime = 0;
   startTime = 0;
+  
+  // 拡張波形モジュールのリセット
+  if (waveformEnhanced) {
+    waveformEnhanced = null;
+  }
   
   // UI初期化
   showSection('upload');
