@@ -374,8 +374,19 @@ section h2 {
     font-weight: 500;
 }
 
-.result-duration {
+.result-details {
+    display: flex;
+    gap: var(--spacing-md);
     font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.result-duration::after {
+    content: " • ";
+    margin: 0 var(--spacing-xs);
+}
+
+.result-size {
     color: var(--text-secondary);
 }
 
@@ -462,6 +473,68 @@ footer a:hover {
 :focus {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
+}
+
+/* メッセージオーバーレイ */
+.message-overlay {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    max-width: 400px;
+    animation: slideIn 0.3s ease-out;
+}
+
+.message-content {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    font-weight: 500;
+}
+
+.error-message .message-content {
+    background-color: #fee;
+    color: #c53030;
+    border: 1px solid #fc8181;
+}
+
+.success-message .message-content {
+    background-color: #f0fdf4;
+    color: #166534;
+    border: 1px solid #86efac;
+}
+
+.message-icon {
+    font-size: 1.25rem;
+}
+
+.message-text {
+    flex: 1;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.fade-out {
+    animation: fadeOut 0.3s ease-out forwards;
+}
+
+@keyframes fadeOut {
+    to {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
 }
 
 /* 印刷スタイル */

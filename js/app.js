@@ -153,7 +153,14 @@ function handleDrop(e) {
 async function processFile(file) {
   // ファイルタイプチェック
   if (!file.type.startsWith('audio/')) {
-    alert('音声ファイルを選択してください。');
+    showError('音声ファイルを選択してください。対応形式: MP3, WAV, M4A, OGG');
+    return;
+  }
+  
+  // ファイルサイズチェック（500MB制限）
+  const maxSize = 500 * 1024 * 1024;
+  if (file.size > maxSize) {
+    showError('ファイルサイズが大きすぎます。500MB以下のファイルを選択してください。');
     return;
   }
   
@@ -165,18 +172,36 @@ async function processFile(file) {
   // 音声データの読み込み
   try {
     showSection('loading');
+    updateProgress(0, 1, 'ファイルを読み込み中...');
+    
     const arrayBuffer = await readFileAsArrayBuffer(file);
+    updateProgress(0.5, 1, 'オーディオデータをデコード中...');
+    
     await decodeAudioData(arrayBuffer);
     
+    // ファイル情報を再度更新（duration取得後）
+    displayFileInfo(file);
+    
     // 波形描画
+    updateProgress(0.8, 1, '波形を生成中...');
     drawWaveform();
     
     // UI表示
     showSection('ready');
+    showSuccess(`${file.name} を読み込みました`);
     
   } catch (error) {
     console.error('ファイル処理エラー:', error);
-    alert('ファイルの読み込みに失敗しました。');
+    let errorMessage = 'ファイルの読み込みに失敗しました。';
+    
+    // エラーメッセージの詳細化
+    if (error.name === 'EncodingError' || error.message.includes('decode')) {
+      errorMessage = 'このファイル形式はサポートされていません。MP3、WAV、M4A、OGGファイルをお試しください。';
+    } else if (error.name === 'NotSupportedError') {
+      errorMessage = 'お使いのブラウザはこのファイル形式に対応していません。';
+    }
+    
+    showError(errorMessage);
     handleReset();
   }
 }
@@ -201,6 +226,15 @@ async function decodeAudioData(arrayBuffer) {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
   }
   
+  // Safari対策: ユーザー操作後にコンテキストを再開
+  if (audioContext.state === 'suspended') {
+    try {
+      await audioContext.resume();
+    } catch (error) {
+      console.warn('AudioContext再開に失敗:', error);
+    }
+  }
+  
   audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 }
 
@@ -214,7 +248,59 @@ function displayFileInfo(file) {
   if (audioBuffer) {
     const duration = audioBuffer.duration;
     elements.fileDuration.textContent = formatTime(duration);
+  } else {
+    elements.fileDuration.textContent = '読み込み中...';
   }
+}
+
+/**
+ * エラーメッセージ表示
+ */
+function showError(message) {
+  // 既存のメッセージを削除
+  const existingMsg = document.querySelector('.message-overlay');
+  if (existingMsg) existingMsg.remove();
+  
+  const messageEl = document.createElement('div');
+  messageEl.className = 'message-overlay error-message fade-in';
+  messageEl.innerHTML = `
+    <div class="message-content">
+      <span class="message-icon">⚠️</span>
+      <span class="message-text">${message}</span>
+    </div>
+  `;
+  
+  document.body.appendChild(messageEl);
+  
+  setTimeout(() => {
+    messageEl.classList.add('fade-out');
+    setTimeout(() => messageEl.remove(), 300);
+  }, 5000);
+}
+
+/**
+ * 成功メッセージ表示
+ */
+function showSuccess(message) {
+  // 既存のメッセージを削除
+  const existingMsg = document.querySelector('.message-overlay');
+  if (existingMsg) existingMsg.remove();
+  
+  const messageEl = document.createElement('div');
+  messageEl.className = 'message-overlay success-message fade-in';
+  messageEl.innerHTML = `
+    <div class="message-content">
+      <span class="message-icon">✅</span>
+      <span class="message-text">${message}</span>
+    </div>
+  `;
+  
+  document.body.appendChild(messageEl);
+  
+  setTimeout(() => {
+    messageEl.classList.add('fade-out');
+    setTimeout(() => messageEl.remove(), 300);
+  }, 3000);
 }
 
 /**
@@ -372,26 +458,58 @@ function handleSplitModeChange(e) {
  * 分割処理
  */
 async function handleSplit() {
-  if (!audioBuffer) return;
+  if (!audioBuffer) {
+    showError('まず音声ファイルを読み込んでください。');
+    return;
+  }
   
   // 再生中の場合は停止
   if (isPlaying) {
     pausePlayback();
   }
   
+  // 入力値の検証
+  const mode = document.querySelector('input[name="splitMode"]:checked').value;
+  
+  if (mode === 'time') {
+    const minutes = parseFloat(elements.splitMinutes.value);
+    if (isNaN(minutes) || minutes <= 0) {
+      showError('分割間隔は0より大きい数値を入力してください。');
+      return;
+    }
+    if (minutes * 60 > audioBuffer.duration) {
+      showError('分割間隔がファイルの長さより長いです。');
+      return;
+    }
+  } else {
+    const parts = parseInt(elements.splitParts.value);
+    if (isNaN(parts) || parts < 2) {
+      showError('分割個数は2以上の整数を入力してください。');
+      return;
+    }
+    if (parts > 50) {
+      showError('分割個数は50以下にしてください。');
+      return;
+    }
+  }
+  
   showSection('processing');
   
   try {
-    const mode = document.querySelector('input[name="splitMode"]:checked').value;
     const segments = calculateSegments(mode);
+    
+    if (segments.length === 0) {
+      throw new Error('セグメントの生成に失敗しました。');
+    }
     
     await processSegments(segments);
     
     showSection('results');
+    showSuccess(`${segments.length}個のファイルに分割しました`);
     
   } catch (error) {
     console.error('分割処理エラー:', error);
-    alert('分割処理中にエラーが発生しました。');
+    showError('分割処理中にエラーが発生しました: ' + error.message);
     showSection('ready');
   }
 }
@@ -453,15 +571,33 @@ async function processSegments(segments) {
     const segment = segments[i];
     updateProgress(i, segments.length, segment.name);
     
-    const segmentBuffer = extractSegment(segment.start, segment.end);
-    const blob = await encodeAudioBuffer(segmentBuffer);
-    
-    results.push({
-      name: segment.name,
-      blob,
-      duration: segment.end - segment.start,
-      url: URL.createObjectURL(blob)
-    });
+    try {
+      const segmentBuffer = extractSegment(segment.start, segment.end);
+      
+      // 空のバッファチェック
+      if (segmentBuffer.length === 0) {
+        throw new Error('空のセグメントが生成されました');
+      }
+      
+      const blob = await encodeAudioBuffer(segmentBuffer);
+      
+      results.push({
+        name: segment.name,
+        blob,
+        duration: segment.end - segment.start,
+        size: blob.size,
+        url: URL.createObjectURL(blob)
+      });
+      
+      // メモリ管理のため、少し待機
+      if (i % 10 === 0 && i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      
+    } catch (error) {
+      console.error(`セグメント ${segment.name} の処理に失敗:`, error);
+      throw new Error(`ファイル "${segment.name}" の生成に失敗しました`);
+    }
   }
   
   displayResults(results);
@@ -542,9 +678,26 @@ async function encodeAudioBuffer(buffer) {
  * 進捗更新
  */
 function updateProgress(current, total, fileName) {
-  const progress = ((current + 1) / total) * 100;
+  let progress;
+  let text;
+  
+  if (typeof current === 'number' && typeof total === 'number') {
+    if (total === 1) {
+      // 単一のプログレス値として扱う（0-1の範囲）
+      progress = current * 100;
+      text = fileName || '処理中...';
+    } else {
+      // 複数のアイテム処理
+      progress = ((current + 1) / total) * 100;
+      text = fileName ? `処理中: ${fileName} (${current + 1}/${total})` : `処理中... (${current + 1}/${total})`;
+    }
+  } else {
+    progress = 0;
+    text = fileName || '準備中...';
+  }
+  
   elements.progressFill.style.width = `${progress}%`;
-  elements.progressText.textContent = `処理中: ${fileName} (${current + 1}/${total})`;
+  elements.progressText.textContent = text;
 }
 
 /**
@@ -556,10 +709,14 @@ function displayResults(results) {
   results.forEach((result, index) => {
     const item = document.createElement('div');
     item.className = 'result-item fade-in';
+    item.style.animationDelay = `${index * 0.05}s`;
     item.innerHTML = `
       <div class="result-info">
         <div class="result-name">${result.name}</div>
-        <div class="result-duration">${formatTime(result.duration)}</div>
+        <div class="result-details">
+          <span class="result-duration">${formatTime(result.duration)}</span>
+          <span class="result-size">${formatFileSize(result.size)}</span>
+        </div>
       </div>
       <div class="result-actions">
         <button class="btn btn-secondary" onclick="playPreview('${result.url}')">試聴</button>
@@ -572,6 +729,10 @@ function displayResults(results) {
   
   // 結果を保持
   window.splitResults = results;
+  
+  // 合計サイズを計算
+  const totalSize = results.reduce((sum, result) => sum + result.size, 0);
+  console.log(`分割完了: ${results.length}ファイル, 合計サイズ: ${formatFileSize(totalSize)}`);
 }
 
 /**
@@ -608,10 +769,13 @@ function handleReset() {
   // 変数リセット
   audioBuffer = null;
   currentFile = null;
+  pauseTime = 0;
+  startTime = 0;
   
   // UI初期化
   showSection('upload');
   elements.fileInput.value = '';
+  elements.filePrefix.value = '';
   
   // 結果クリーンアップ
   if (window.splitResults) {
@@ -620,6 +784,12 @@ function handleReset() {
     });
     window.splitResults = null;
   }
+  
+  // メッセージ削除
+  const existingMsg = document.querySelector('.message-overlay');
+  if (existingMsg) existingMsg.remove();
+  
+  showSuccess('新しいファイルを処理できます');
 }
 
 /**
